@@ -321,6 +321,80 @@ export function getCarparkMarkerIconURL(
   return url;
 }
 
+const clusterIconCache = new Map<string, string>();
+
+/** Cluster chip like `5/15` (vacant / total meters in the group). */
+export function getMeterClusterIconURL(
+  vacant: number,
+  total: number,
+  darkMode: boolean,
+): string {
+  const safeVacant = Math.max(0, vacant);
+  const safeTotal = Math.max(0, total);
+  const cacheKey = `${safeVacant}/${safeTotal}|${darkMode ? 'dark' : 'light'}`;
+  const cached = clusterIconCache.get(cacheKey);
+  if (cached) return cached;
+
+  const label = `${safeVacant}/${safeTotal}`;
+  const canvas = document.createElement('canvas');
+  const measure = canvas.getContext('2d');
+  if (!measure) return '';
+
+  measure.font = '700 15px -apple-system, system-ui, sans-serif';
+  const textWidth = measure.measureText(label).width;
+  const paddingX = 14;
+  const bubbleHeight = 34;
+  const bubbleWidth = Math.max(52, textWidth + paddingX * 2);
+  const width = bubbleWidth + 8;
+  const height = bubbleHeight + 8;
+  canvas.width = Math.ceil(width);
+  canvas.height = Math.ceil(height);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  const ratio = safeTotal > 0 ? safeVacant / safeTotal : 0;
+  let fill: string;
+  if (safeVacant <= 0) {
+    fill = darkMode ? 'rgb(88,88,92)' : 'rgb(142,142,147)';
+  } else if (ratio >= 0.4) {
+    fill = darkMode ? 'rgb(48,180,90)' : 'rgb(52,199,89)';
+  } else if (ratio >= 0.15) {
+    fill = darkMode ? 'rgb(237,143,41)' : 'rgb(255,149,0)';
+  } else {
+    fill = darkMode ? 'rgb(219,71,61)' : 'rgb(255,59,48)';
+  }
+
+  const x = 4;
+  const y = 4;
+
+  ctx.save();
+  ctx.shadowColor = darkMode ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  roundRect(ctx, x, y, bubbleWidth, bubbleHeight, bubbleHeight / 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.restore();
+
+  roundRect(ctx, x, y, bubbleWidth, bubbleHeight, bubbleHeight / 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 15px -apple-system, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + bubbleWidth / 2, y + bubbleHeight / 2 + 0.5);
+
+  const url = canvas.toDataURL('image/png');
+  clusterIconCache.set(cacheKey, url);
+  return url;
+}
+
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,

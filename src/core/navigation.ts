@@ -22,9 +22,11 @@ export function openAMapDirections(
   longitude: number,
   title: string,
 ): void {
-  const encoded = encodeURIComponent(title || 'Destination');
-  const url = `https://uri.amap.com/navigation?to=${longitude},${latitude},${encoded}&mode=car&coordinate=wgs84&callnative=1`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const encodedTitle = encodeURIComponent(title);
+  const destinationNameParameter = encodedTitle ? `&dname=${encodedTitle}` : '';
+  // Matches iOS MikeBill: iosamap://path with WGS84 (dev=1) and driving (t=0).
+  const url = `iosamap://path?sourceApplication=MikeBilliOS&dlat=${latitude}&dlon=${longitude}${destinationNameParameter}&dev=1&t=0`;
+  window.location.href = url;
 }
 
 export function openHKEMeter(): boolean {

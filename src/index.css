@@ -10,6 +10,9 @@
   --color-tertiary-label: rgba(60, 60, 67, 0.3);
   --color-separator: rgba(60, 60, 67, 0.12);
   --color-fill-tertiary: rgba(118, 118, 128, 0.12);
+  --color-segmented-track: rgba(118, 118, 128, 0.16);
+  --color-segmented-thumb: #ffffff;
+  --color-segmented-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
   --color-accent: #007aff;
   --color-green: #34c759;
   --color-red: #ff3b30;
@@ -28,6 +31,9 @@ html.dark {
   --color-tertiary-label: rgba(235, 235, 245, 0.3);
   --color-separator: rgba(84, 84, 88, 0.65);
   --color-fill-tertiary: rgba(118, 118, 128, 0.24);
+  --color-segmented-track: rgba(118, 118, 128, 0.36);
+  --color-segmented-thumb: #636366;
+  --color-segmented-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.28), 0 3px 1px rgba(0, 0, 0, 0.12);
   --color-accent: #0a84ff;
   --color-green: #30d158;
   --color-red: #ff453a;

@@ -1,6 +1,7 @@
 import { MapMode, MAP_MODE_TITLES } from '../../models';
 import { useAppStore } from '../../store';
 import { BottomSheet, SheetDoneButton } from '../ui/BottomSheet';
+import { SegmentedControl } from '../ui/LiquidUI';
 
 export function SettingsSheet({
   open,
@@ -11,11 +12,9 @@ export function SettingsSheet({
 }) {
   const mapMode = useAppStore((s) => s.mapMode);
   const enableDarkMode = useAppStore((s) => s.enableDarkMode);
-  const enableAlert = useAppStore((s) => s.enableAlert);
   const rememberLastView = useAppStore((s) => s.rememberLastView);
   const setMapMode = useAppStore((s) => s.setMapMode);
   const setEnableDarkMode = useAppStore((s) => s.setEnableDarkMode);
-  const setEnableAlert = useAppStore((s) => s.setEnableAlert);
   const setRememberLastView = useAppStore((s) => s.setRememberLastView);
 
   return (
@@ -33,22 +32,16 @@ export function SettingsSheet({
           <div className="overflow-hidden rounded-[12px] bg-[var(--color-grouped-secondary)]">
             <div className="px-4 py-3">
               <div className="mb-2 text-[15px] text-[var(--color-label)]">Visible Items</div>
-              <div className="flex gap-1 rounded-[9px] bg-[var(--color-fill-tertiary)] p-0.5">
-                {([MapMode.all, MapMode.parkingMeter, MapMode.carpark] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setMapMode(mode)}
-                    className={`h-8 flex-1 rounded-[7px] text-[13px] font-semibold ${
-                      mapMode === mode
-                        ? 'bg-[var(--color-grouped-secondary)] text-[var(--color-label)] shadow-sm'
-                        : 'text-[var(--color-secondary-label)]'
-                    }`}
-                  >
-                    {MAP_MODE_TITLES[mode]}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                value={mapMode}
+                onChange={setMapMode}
+                options={
+                  ([MapMode.all, MapMode.parkingMeter, MapMode.carpark] as const).map((mode) => ({
+                    value: mode,
+                    label: MAP_MODE_TITLES[mode],
+                  }))
+                }
+              />
             </div>
           </div>
           <p className="mt-2 px-1 text-[13px] text-[var(--color-secondary-label)]">
@@ -61,14 +54,6 @@ export function SettingsSheet({
           label="Dark Appearance"
           checked={enableDarkMode}
           onChange={setEnableDarkMode}
-        />
-
-        <ToggleSection
-          header="Notifications"
-          label="Alerts"
-          footer="Enable app alerts for parking-related updates."
-          checked={enableAlert}
-          onChange={setEnableAlert}
         />
 
         <ToggleSection

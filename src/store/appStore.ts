@@ -12,9 +12,7 @@ import {
   type SearchLocation,
   HONG_KONG_DEFAULT_VIEWPORT,
   MapMode,
-  OccupancyStatus,
   carparkDetailPhotoURLs,
-  occupancyChangedAt,
 } from '../models';
 import { apiService } from '../services/apiService';
 import { idbGet, idbSet } from '../services/idbCache';
@@ -24,7 +22,6 @@ import {
   mergeCarpark,
   moveFavoriteInFilteredView,
   moveItem,
-  notifyVacancyAlert,
   recordsEqualByJson,
   sleep,
   sortMeterFeatures,
@@ -34,7 +31,6 @@ export interface AppState {
   mapMode: MapMode;
   viewport: MapViewport;
   enableDarkMode: boolean;
-  enableAlert: boolean;
   rememberLastView: boolean;
   favoriteLocations: FavoriteLocation[];
   favoriteCarparks: FavoriteCarpark[];
@@ -60,7 +56,6 @@ export interface AppActions {
   updateViewport: (viewport: MapViewport) => void;
   setMapMode: (mode: MapMode) => void;
   setEnableDarkMode: (value: boolean) => void;
-  setEnableAlert: (value: boolean) => void;
   setRememberLastView: (value: boolean) => void;
 
   addFavoriteLocation: (name: string) => void;
@@ -139,7 +134,6 @@ function loadInitialState(): AppState {
     mapMode,
     viewport,
     enableDarkMode: storageService.bool(AppStorageKeys.enableDarkMode, true),
-    enableAlert: storageService.bool(AppStorageKeys.enableAlert, true),
     rememberLastView,
     favoriteLocations:
       storageService.load<FavoriteLocation[]>(AppStorageKeys.favoriteLocations) ?? [],
@@ -298,11 +292,6 @@ export const useAppStore = create<AppStore>((set, get) => {
     setEnableDarkMode: (value) => {
       set({ enableDarkMode: value });
       storageService.setBool(value, AppStorageKeys.enableDarkMode);
-    },
-
-    setEnableAlert: (value) => {
-      set({ enableAlert: value });
-      storageService.setBool(value, AppStorageKeys.enableAlert);
     },
 
     setRememberLastView: (value) => {
@@ -601,27 +590,8 @@ export const useAppStore = create<AppStore>((set, get) => {
           apiService.fetchCarparkVacancies(),
         ]);
 
-        const { enableAlert, meterOccupancy } = get();
-        const newlyVacantIds: string[] = [];
-        if (enableAlert) {
-          const now = Date.now();
-          for (const [key, record] of Object.entries(fetchedOccupancy)) {
-            if (record.status !== OccupancyStatus.vacant) continue;
-            const old = meterOccupancy[key];
-            if (old?.status === OccupancyStatus.vacant) continue;
-            const changedAt = occupancyChangedAt(record);
-            if (changedAt && now - changedAt.getTime() < 60_000) {
-              newlyVacantIds.push(key);
-            }
-          }
-        }
-
         applyMeterOccupancy(fetchedOccupancy);
         applyCarparkVacancies(fetchedVacancies);
-
-        if (newlyVacantIds.length > 0) {
-          notifyVacancyAlert();
-        }
       } catch (error) {
         console.log('[AppModel][refreshVacancyOnly][Error]', error);
       }

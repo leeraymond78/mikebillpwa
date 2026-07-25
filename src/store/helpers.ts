@@ -117,13 +117,3 @@ export function moveFavoriteInFilteredView(
   next.splice(targetOriginalIndex, 0, item);
   return next;
 }
-
-export function notifyVacancyAlert(): void {
-  try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate([40, 30, 40]);
-    }
-  } catch {
-    // Ignore unsupported vibration APIs.
-  }
-}

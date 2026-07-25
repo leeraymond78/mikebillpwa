@@ -1,7 +1,6 @@
 /** Mirrors MikeBilliOS `AppStorageKeys` — keep string values identical. */
 export const AppStorageKeys = {
   enableDarkMode: 'enableDarkMode',
-  enableAlert: 'enableAlert',
   rememberLastView: 'rememberLastView',
   currentMapMode: 'currentMapMode',
   lastLatitude: 'lastLat',

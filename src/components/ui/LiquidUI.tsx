@@ -181,7 +181,7 @@ export function DetailDiscountRow({
   );
 }
 
-export function SegmentedControl<T extends string>({
+export function SegmentedControl<T extends string | number>({
   value,
   options,
   onChange,
@@ -191,23 +191,28 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex gap-1.5 rounded-[10px] bg-[var(--color-fill-tertiary)] p-1">
+    <div
+      role="tablist"
+      className="flex rounded-[9px] bg-[var(--color-segmented-track)] p-[2px]"
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
           <button
             key={option.value}
             type="button"
+            role="tab"
+            aria-selected={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[14px] font-semibold transition-colors',
+              'flex h-[28px] flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[13px] font-semibold tracking-[-0.08px] transition-[color,background-color,box-shadow] duration-150',
               selected
-                ? 'bg-[var(--color-grouped-secondary)] text-[var(--color-label)] shadow-sm'
-                : 'bg-transparent text-[var(--color-secondary-label)]',
+                ? 'bg-[var(--color-segmented-thumb)] text-[var(--color-label)] shadow-[var(--color-segmented-thumb-shadow)]'
+                : 'bg-transparent text-[var(--color-label)]/55',
             )}
           >
             {option.icon}
-            {option.label}
+            <span>{option.label}</span>
           </button>
         );
       })}

@@ -35,6 +35,7 @@ export function FavoritesSheet({
 
   const favoriteLocations = useAppStore((s) => s.favoriteLocations);
   const favoriteCarparks = useAppStore((s) => s.favoriteCarparks);
+  const carparkVacancies = useAppStore((s) => s.carparkVacancies);
   const enableDarkMode = useAppStore((s) => s.enableDarkMode);
   const navigateToFavoriteLocation = useAppStore((s) => s.navigateToFavoriteLocation);
   const renameFavoriteLocation = useAppStore((s) => s.renameFavoriteLocation);
@@ -173,13 +174,16 @@ export function FavoritesSheet({
                 }}
               >
                 <CarparkThumbnail favorite={favorite} />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="truncate text-[22px] text-[var(--color-label)]">
                     {favorite.name}
                   </div>
                   <div className="line-clamp-2 text-[17px] text-[var(--color-secondary-label)]">
                     {favorite.address}
                   </div>
+                  <FavoriteCarparkVacancy
+                    vacancy={favoriteVacancy(favorite, carparkVacancies)}
+                  />
                 </div>
               </button>
               <FavoriteMenu
@@ -286,6 +290,35 @@ function MapThumbnail({
         setFailed(true);
       }}
     />
+  );
+}
+
+function favoriteVacancy(
+  favorite: FavoriteCarpark,
+  vacancies: Record<string, string>,
+): string | undefined {
+  const vacancyId = favorite.vacancyId;
+  if (!vacancyId) return undefined;
+  const value = vacancies[vacancyId];
+  if (value === undefined || value === '0' || value === '-1' || value === '') {
+    return undefined;
+  }
+  return value;
+}
+
+function FavoriteCarparkVacancy({ vacancy }: { vacancy: string | undefined }) {
+  if (vacancy == null) {
+    return (
+      <div className="mt-0.5 text-[15px] text-[var(--color-secondary-label)]">
+        Vacancy unknown
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-0.5 text-[15px] font-semibold text-[var(--color-green)]">
+      {vacancy} vacant
+    </div>
   );
 }
 

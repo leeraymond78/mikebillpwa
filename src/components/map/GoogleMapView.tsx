@@ -12,15 +12,23 @@ import { useAppStore } from '../../store';
 import type { LatLng } from '../../core/geo';
 import {
   getCarparkMarkerIconURL,
+  getMeterClusterIconURL,
   getMeterMarkerIconURL,
   getMeterMarkerZIndex,
 } from './markerIcons';
+import {
+  buildMeterClusters,
+  MINIMUM_INDIVIDUAL_METER_ZOOM,
+} from './meterClusters';
+
 const MARKER_RENDER_RADIUS_METERS = 5_000;
 const PADDED_VISIBLE_REGION_MULTIPLIER = 1.25;
 const MAX_RENDERED_METER_MARKERS = 2000;
 const MAX_RENDERED_CARPARK_MARKERS = 80;
 const MINIMUM_CARPARK_ZOOM_LEVEL = 15.5;
 const METERS_PER_DEGREE_LATITUDE = 111_320;
+const DOUBLE_TAP_MS = 320;
+const SINGLE_TAP_SELECT_DELAY_MS = 340;
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 /** Cloud map ID required for AdvancedMarkerElement. Override in env for production styling. */
@@ -70,6 +78,7 @@ function MapController() {
   const map = useMap();
   const markerLib = useMapsLibrary('marker');
   const meterMarkersRef = useRef<Map<number, AdvancedMarker>>(new Map());
+  const clusterMarkersRef = useRef<Map<string, AdvancedMarker>>(new Map());
   const carparkMarkersRef = useRef<Map<number, AdvancedMarker>>(new Map());
   const selectedMarkerRef = useRef<AdvancedMarker | null>(null);
   const userLocationMarkerRef = useRef<AdvancedMarker | null>(null);
@@ -99,6 +108,9 @@ function MapController() {
       disableDefaultUI: true,
       clickableIcons: false,
       gestureHandling: 'greedy',
+      // We handle double-tap zoom ourselves so it works reliably on iOS
+      // (map `click` was opening Selected Location and eating the second tap).
+      disableDoubleClickZoom: true,
       zoomControl: false,
       mapTypeControl: false,
       streetViewControl: false,
@@ -214,18 +226,76 @@ function MapController() {
       );
     });
 
+    let pendingSelectTimer: number | null = null;
+    let lastTapAt = 0;
+    let lastTapLatLng: google.maps.LatLng | null = null;
+    let lastZoomAt = 0;
+
+    const clearPendingSelect = () => {
+      if (pendingSelectTimer != null) {
+        window.clearTimeout(pendingSelectTimer);
+        pendingSelectTimer = null;
+      }
+    };
+
+    const zoomInAt = (latLng: google.maps.LatLng) => {
+      const now = Date.now();
+      // Avoid +2 zoom when both click-pair and dblclick fire.
+      if (now - lastZoomAt < 400) return;
+      lastZoomAt = now;
+      isUserInteractingRef.current = true;
+      suppressViewportSyncUntilRef.current = Date.now() + 1000;
+      const currentZoom = map.getZoom() ?? 14;
+      map.panTo(latLng);
+      map.setZoom(Math.min(currentZoom + 1, 21));
+    };
+
+    const isNearPreviousTap = (latLng: google.maps.LatLng) => {
+      if (!lastTapLatLng) return false;
+      return (
+        Math.abs(lastTapLatLng.lat() - latLng.lat()) < 0.002 &&
+        Math.abs(lastTapLatLng.lng() - latLng.lng()) < 0.002
+      );
+    };
+
     const click = map.addListener('click', (event: google.maps.MapMouseEvent) => {
       if (!event.latLng) return;
-      setSelectedCoordinate({
-        latitude: event.latLng.lat(),
-        longitude: event.latLng.lng(),
-      });
+
+      const now = Date.now();
+      if (now - lastTapAt < DOUBLE_TAP_MS && isNearPreviousTap(event.latLng)) {
+        clearPendingSelect();
+        lastTapAt = 0;
+        lastTapLatLng = null;
+        zoomInAt(event.latLng);
+        return;
+      }
+
+      lastTapAt = now;
+      lastTapLatLng = event.latLng;
+      clearPendingSelect();
+
+      const latitude = event.latLng.lat();
+      const longitude = event.latLng.lng();
+      pendingSelectTimer = window.setTimeout(() => {
+        pendingSelectTimer = null;
+        setSelectedCoordinate({ latitude, longitude });
+      }, SINGLE_TAP_SELECT_DELAY_MS);
+    });
+
+    const dblclick = map.addListener('dblclick', (event: google.maps.MapMouseEvent) => {
+      // Desktop / browsers that also emit dblclick after two clicks.
+      clearPendingSelect();
+      lastTapAt = 0;
+      lastTapLatLng = null;
+      if (event.latLng) zoomInAt(event.latLng);
     });
 
     return () => {
+      clearPendingSelect();
       dragStart.remove();
       idle.remove();
       click.remove();
+      dblclick.remove();
     };
   }, [map, updateViewport, fetchVisibleData, setSelectedCoordinate]);
 
@@ -235,8 +305,72 @@ function MapController() {
     const shouldShow = mapMode === MapMode.all || mapMode === MapMode.parkingMeter;
     if (!shouldShow) {
       clearMarkerMap(meterMarkersRef.current);
+      clearClusterMarkerMap(clusterMarkersRef.current);
       return;
     }
+
+    const zoom = map.getZoom() ?? viewport.zoom;
+    const useClusters = zoom < MINIMUM_INDIVIDUAL_METER_ZOOM;
+
+    if (useClusters) {
+      clearMarkerMap(meterMarkersRef.current);
+
+      const candidates = meterFeaturesInVisibleBounds(map, meterFeatures);
+      const clusters = buildMeterClusters(candidates, meterOccupancy);
+      const active = new Set<string>();
+
+      for (const cluster of clusters) {
+        active.add(cluster.id);
+        const position = { lat: cluster.latitude, lng: cluster.longitude };
+        const iconUrl = getMeterClusterIconURL(
+          cluster.vacant,
+          cluster.total,
+          enableDarkMode,
+        );
+        const content = createIconContent(iconUrl, 'center');
+        const zIndex = 3000 + cluster.vacant;
+        const title = `${cluster.vacant}/${cluster.total} vacant`;
+
+        let marker = clusterMarkersRef.current.get(cluster.id);
+        if (!marker) {
+          marker = new markerLib.AdvancedMarkerElement({
+            map,
+            position,
+            content,
+            zIndex,
+            gmpClickable: true,
+            title,
+          });
+          marker.addEventListener('gmp-click', () => {
+            const pos = marker?.position;
+            if (!pos) return;
+            const lat = typeof pos.lat === 'function' ? pos.lat() : pos.lat;
+            const lng = typeof pos.lng === 'function' ? pos.lng() : pos.lng;
+            if (typeof lat !== 'number' || typeof lng !== 'number') return;
+            map.panTo({ lat, lng });
+            const currentZoom = map.getZoom() ?? zoom;
+            map.setZoom(Math.min(currentZoom + 2, MINIMUM_INDIVIDUAL_METER_ZOOM));
+          });
+          clusterMarkersRef.current.set(cluster.id, marker);
+        } else {
+          marker.position = position;
+          marker.content = content;
+          marker.zIndex = zIndex;
+          marker.title = title;
+          if (marker.map !== map) marker.map = map;
+        }
+      }
+
+      for (const [id, marker] of clusterMarkersRef.current) {
+        if (!active.has(id)) {
+          marker.map = null;
+          clusterMarkersRef.current.delete(id);
+        }
+      }
+      return;
+    }
+
+    clearClusterMarkerMap(clusterMarkersRef.current);
 
     const center = map.getCenter();
     if (!center) return;
@@ -288,7 +422,17 @@ function MapController() {
         meterMarkersRef.current.delete(id);
       }
     }
-  }, [map, markerLib, mapMode, meterFeatures, meterOccupancy, viewport, meterRecordFn, setSelectedMeter]);
+  }, [
+    map,
+    markerLib,
+    mapMode,
+    meterFeatures,
+    meterOccupancy,
+    viewport,
+    enableDarkMode,
+    meterRecordFn,
+    setSelectedMeter,
+  ]);
 
   useEffect(() => {
     if (!map || !markerLib) return;
@@ -406,6 +550,7 @@ function MapController() {
   useEffect(() => {
     return () => {
       clearMarkerMap(meterMarkersRef.current);
+      clearClusterMarkerMap(clusterMarkersRef.current);
       clearMarkerMap(carparkMarkersRef.current);
       if (selectedMarkerRef.current) {
         selectedMarkerRef.current.map = null;
@@ -469,6 +614,26 @@ function clearMarkerMap(storage: Map<number, AdvancedMarker>): void {
     marker.map = null;
   }
   storage.clear();
+}
+
+function clearClusterMarkerMap(storage: Map<string, AdvancedMarker>): void {
+  for (const marker of storage.values()) {
+    marker.map = null;
+  }
+  storage.clear();
+}
+
+function meterFeaturesInVisibleBounds(
+  map: google.maps.Map,
+  features: ParkingMeterFeature[],
+): ParkingMeterFeature[] {
+  const bounds = paddedVisibleBounds(map);
+  if (!bounds) return [];
+  return features.filter((feature) => {
+    const latitude = feature.geometry.coordinates[1] ?? 0;
+    const longitude = feature.geometry.coordinates[0] ?? 0;
+    return contains(bounds, latitude, longitude);
+  });
 }
 
 interface PaddedBounds {
