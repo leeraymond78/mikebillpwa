@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Plus, Search, Settings, Star } from 'lucide-react';
+import { LocateFixed, Plus, Search, Settings, Star } from 'lucide-react';
 
 export function RefreshIndicator({ progress }: { progress: number }) {
   const remaining = Math.max(0, Math.min(1, 1 - progress));
@@ -48,17 +48,21 @@ export function ControlBar({
   onSettings,
   onFavorites,
   onAddFavorite,
+  onLocate,
   onRefreshTap,
+  locating = false,
 }: {
   refreshProgress: number;
   onSearch: () => void;
   onSettings: () => void;
   onFavorites: () => void;
   onAddFavorite: () => void;
+  onLocate: () => void;
   onRefreshTap: () => void;
+  locating?: boolean;
 }) {
   return (
-    <div className="mx-4 mb-3 flex items-center gap-2.5 rounded-full bg-[color-mix(in_srgb,var(--color-grouped-secondary)_72%,transparent)] px-3 py-2.5 shadow-[0_8px_16px_rgba(0,0,0,0.08)] ring-1 ring-[var(--color-card-stroke)] backdrop-blur-xl">
+    <div className="mx-auto flex w-fit items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--color-grouped-secondary)_72%,transparent)] px-2.5 py-2 shadow-[0_8px_16px_rgba(0,0,0,0.08)] ring-1 ring-[var(--color-card-stroke)] backdrop-blur-xl">
       <GlassIconButton label="Search" onClick={onSearch}>
         <Search className="h-[17px] w-[17px]" strokeWidth={2.25} />
       </GlassIconButton>
@@ -71,14 +75,21 @@ export function ControlBar({
       <GlassIconButton label="Add favorite" onClick={onAddFavorite}>
         <Plus className="h-[17px] w-[17px]" strokeWidth={2.25} />
       </GlassIconButton>
+      <GlassIconButton
+        label="Show current location"
+        onClick={onLocate}
+        active={locating}
+      >
+        <LocateFixed className="h-[17px] w-[17px]" strokeWidth={2.25} />
+      </GlassIconButton>
 
-      <div className="mx-0.5 h-[26px] w-px bg-[var(--color-separator)]" />
+      <div className="mx-0.5 h-[26px] w-px shrink-0 bg-[var(--color-separator)]" />
 
       <button
         type="button"
         aria-label="Open HK E-Meter"
         onClick={onRefreshTap}
-        className="flex h-11 w-11 items-center justify-center"
+        className="flex h-10 w-10 items-center justify-center"
       >
         <RefreshIndicator progress={refreshProgress} />
       </button>
@@ -90,19 +101,24 @@ function GlassIconButton({
   children,
   label,
   onClick,
+  active = false,
 }: {
   children: ReactNode;
   label: string;
   onClick: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center text-[var(--color-label)] active:opacity-60"
+      className={`flex h-10 w-10 items-center justify-center active:opacity-60 ${
+        active ? 'text-[var(--color-accent)]' : 'text-[var(--color-label)]'
+      }`}
     >
-      <span className="flex h-[30px] w-10 items-center justify-center">{children}</span>
+      <span className="flex h-[30px] w-[30px] items-center justify-center">{children}</span>
     </button>
   );
 }

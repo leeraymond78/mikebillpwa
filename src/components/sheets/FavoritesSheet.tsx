@@ -9,10 +9,14 @@ import { SegmentedControl } from '../ui/LiquidUI';
 
 type FavoritesTab = 'maps' | 'carparks';
 
-const STATIC_MAP_KEY =
-  import.meta.env.VITE_GOOGLE_MAPS_STATIC_KEY ||
-  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-  'AIzaSyAoJ7HPoioDf5chpfBxw90fNZmE0nQHXx4';
+/** Prefer the Maps JS key (same referrer rules as the live map); fall back to a dedicated Static key. */
+function staticMapApiKeys(): string[] {
+  const keys = [
+    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim(),
+    (import.meta.env.VITE_GOOGLE_MAPS_STATIC_KEY as string | undefined)?.trim(),
+  ].filter((key): key is string => Boolean(key));
+  return [...new Set(keys)];
+}
 
 export function FavoritesSheet({
   open,
@@ -242,25 +246,44 @@ function MapThumbnail({
   favorite: FavoriteLocation;
   dark: boolean;
 }) {
-  const url = useMemo(
-    () =>
-      buildStaticMapURL({
-        latitude: favorite.latitude,
-        longitude: favorite.longitude,
-        zoom: favorite.zoom,
-        dark,
-        apiKey: STATIC_MAP_KEY,
-      }),
-    [favorite.latitude, favorite.longitude, favorite.zoom, dark],
-  );
+  const keys = useMemo(() => staticMapApiKeys(), []);
+  const [keyIndex, setKeyIndex] = useState(0);
+  const [failed, setFailed] = useState(keys.length === 0);
+
+  const url = useMemo(() => {
+    const apiKey = keys[keyIndex];
+    if (!apiKey) return null;
+    return buildStaticMapURL({
+      latitude: favorite.latitude,
+      longitude: favorite.longitude,
+      zoom: favorite.zoom,
+      dark,
+      apiKey,
+      width: 200,
+      height: 152,
+      scale: 2,
+    });
+  }, [favorite.latitude, favorite.longitude, favorite.zoom, dark, keys, keyIndex]);
+
+  if (failed || !url) {
+    return (
+      <div className="flex h-[76px] w-[100px] shrink-0 items-center justify-center rounded-xl bg-[var(--color-fill-tertiary)] text-[var(--color-secondary-label)] shadow-[0_0_0_0.8px_var(--color-card-stroke)]">
+        <MapIcon className="h-6 w-6" strokeWidth={2} />
+      </div>
+    );
+  }
 
   return (
     <img
       src={url}
       alt=""
-      className="h-20 w-[100px] shrink-0 rounded-xl object-cover shadow-[0_0_0_0.8px_var(--color-card-stroke)]"
-      onError={(event) => {
-        event.currentTarget.style.display = 'none';
+      className="h-[76px] w-[100px] shrink-0 rounded-xl object-cover shadow-[0_0_0_0.8px_var(--color-card-stroke)]"
+      onError={() => {
+        if (keyIndex < keys.length - 1) {
+          setKeyIndex((index) => index + 1);
+          return;
+        }
+        setFailed(true);
       }}
     />
   );

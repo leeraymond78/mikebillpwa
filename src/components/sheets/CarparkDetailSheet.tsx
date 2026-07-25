@@ -28,7 +28,6 @@ import {
   LiquidActionButton,
   LiquidActionRow,
   LiquidSheetHeader,
-  SheetGrabber,
 } from '../ui/LiquidUI';
 
 export function CarparkDetailSheet({
@@ -60,7 +59,6 @@ export function CarparkDetailSheet({
     <>
       <BottomSheet open={open} onOpenChange={onOpenChange} detent="large">
         <div className="space-y-4 px-4 pb-7">
-          <SheetGrabber className="pt-0" />
           <LiquidSheetHeader
             title={detail.name}
             subtitle={detail.address}

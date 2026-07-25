@@ -19,7 +19,6 @@ import {
   LiquidActionButton,
   LiquidActionRow,
   LiquidSheetHeader,
-  SheetGrabber,
 } from '../ui/LiquidUI';
 
 export function MeterDetailSheet({
@@ -58,9 +57,8 @@ export function MeterDetailSheet({
   const title = streetTitle || 'Parking Meter';
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} detent="medium">
+    <BottomSheet open={open} onOpenChange={onOpenChange} detent="large">
       <div className="space-y-4 px-4 pb-7">
-        <SheetGrabber className="pt-0" />
         <LiquidSheetHeader
           title={title}
           subtitle={feature.properties.districtTC ?? 'Parking Meter'}

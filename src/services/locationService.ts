@@ -29,28 +29,37 @@ class LocationServiceImpl {
   }
 
   requestCurrentLocation(): void {
+    void this.requestCurrentLocationAsync();
+  }
+
+  requestCurrentLocationAsync(): Promise<LatLng> {
     if (!navigator.geolocation) {
+      const error = new Error('Geolocation unavailable');
       console.warn('[LocationService] geolocation unavailable');
-      return;
+      return Promise.reject(error);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        this.currentLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        this.emit();
-      },
-      (error) => {
-        console.warn('[LocationService] Location error:', error.message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15_000,
-        maximumAge: 5_000,
-      },
-    );
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          this.currentLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          this.emit();
+          resolve(this.currentLocation);
+        },
+        (error) => {
+          console.warn('[LocationService] Location error:', error.message);
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15_000,
+          maximumAge: 5_000,
+        },
+      );
+    });
   }
 
   /** Optional continuous watch for map "my location" UX. */

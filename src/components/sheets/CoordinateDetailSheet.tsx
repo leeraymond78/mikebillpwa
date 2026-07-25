@@ -13,7 +13,6 @@ import {
   LiquidActionButton,
   LiquidActionRow,
   LiquidSheetHeader,
-  SheetGrabber,
 } from '../ui/LiquidUI';
 
 export function CoordinateDetailSheet({
@@ -33,9 +32,8 @@ export function CoordinateDetailSheet({
   const hemisphere = `${coordinate.latitude >= 0 ? 'N' : 'S'} / ${coordinate.longitude >= 0 ? 'E' : 'W'}`;
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} detent="medium">
+    <BottomSheet open={open} onOpenChange={onOpenChange} detent="large">
       <div className="space-y-4 px-4 pb-7">
-        <SheetGrabber className="pt-0" />
         <LiquidSheetHeader title="Selected Location" subtitle={summary} />
 
         <LiquidActionRow>

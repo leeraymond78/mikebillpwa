@@ -8,9 +8,30 @@ import { FavoritesSheet } from '../components/sheets/FavoritesSheet';
 import { MeterDetailSheet } from '../components/sheets/MeterDetailSheet';
 import { SettingsSheet } from '../components/sheets/SettingsSheet';
 import { openHKEMeter } from '../core/navigation';
+import { locationService } from '../services/locationService';
 import { useAppStore } from '../store';
 
 const REFRESH_CYCLE_DURATION = 7;
+const LOCATE_ZOOM = 16;
+
+function locationErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code: number }).code;
+    if (code === 1) return 'Location permission denied';
+    if (code === 2) return 'Location unavailable';
+    if (code === 3) return 'Location request timed out';
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    (error as { message: string }).message
+  ) {
+    return (error as { message: string }).message;
+  }
+  return 'Unable to get current location';
+}
 
 /**
  * Mirrors iOS `HomeMapView`:
@@ -24,6 +45,7 @@ export function HomeMapPage() {
   const [newFavoriteName, setNewFavoriteName] = useState('');
   const [refreshProgress, setRefreshProgress] = useState(0);
   const [showHKEMeterAlert, setShowHKEMeterAlert] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   const selectedMeter = useAppStore((s) => s.selectedMeter);
   const selectedCarpark = useAppStore((s) => s.selectedCarpark);
@@ -31,10 +53,32 @@ export function HomeMapPage() {
   const selectedCoordinate = useAppStore((s) => s.selectedCoordinate);
   const lastErrorMessage = useAppStore((s) => s.lastErrorMessage);
   const addFavoriteLocation = useAppStore((s) => s.addFavoriteLocation);
+  const updateViewport = useAppStore((s) => s.updateViewport);
   const setSelectedMeter = useAppStore((s) => s.setSelectedMeter);
   const setSelectedCoordinate = useAppStore((s) => s.setSelectedCoordinate);
   const clearError = useAppStore((s) => s.clearError);
   const clearSelections = useAppStore((s) => s.clearSelections);
+
+  const centerOnCurrentLocation = (options?: { showError?: boolean }) => {
+    if (locating) return;
+    setLocating(true);
+    locationService.startWatching();
+    void locationService
+      .requestCurrentLocationAsync()
+      .then((coordinate) => {
+        updateViewport({
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          zoom: LOCATE_ZOOM,
+        });
+      })
+      .catch((error: unknown) => {
+        if (options?.showError !== false) {
+          useAppStore.setState({ lastErrorMessage: locationErrorMessage(error) });
+        }
+      })
+      .finally(() => setLocating(false));
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -45,6 +89,27 @@ export function HomeMapPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Center on device location at launch (deep-link locate routes win).
+  useEffect(() => {
+    if (window.location.hash.includes('locate')) return;
+
+    setLocating(true);
+    locationService.startWatching();
+    void locationService
+      .requestCurrentLocationAsync()
+      .then((coordinate) => {
+        updateViewport({
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          zoom: LOCATE_ZOOM,
+        });
+      })
+      .catch(() => {
+        // Keep default / remembered viewport if permission is denied or unavailable.
+      })
+      .finally(() => setLocating(false));
+  }, [updateViewport]);
+
   const coordinateSheetOpen =
     selectedCoordinate != null &&
     selectedMeter == null &&
@@ -52,9 +117,9 @@ export function HomeMapPage() {
     carparkDetail == null;
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
+    <div className="fixed inset-0 overflow-hidden bg-black">
       <div className="absolute inset-0">
-        <GoogleMapView bottomControlInset={118} />
+        <GoogleMapView />
       </div>
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
@@ -67,9 +132,10 @@ export function HomeMapPage() {
 
         <div className="flex-1" />
 
-        <div className="pointer-events-auto pb-3">
+        <div className="pointer-events-auto safe-pb">
           <ControlBar
             refreshProgress={refreshProgress}
+            locating={locating}
             onSearch={() => setIsShowingSearch((value) => !value)}
             onSettings={() => setIsShowingSettings(true)}
             onFavorites={() => setIsShowingFavorites(true)}
@@ -77,6 +143,7 @@ export function HomeMapPage() {
               setNewFavoriteName('');
               setIsShowingAddFavorite(true);
             }}
+            onLocate={() => centerOnCurrentLocation({ showError: true })}
             onRefreshTap={() => {
               openHKEMeter();
               window.setTimeout(() => setShowHKEMeterAlert(true), 700);

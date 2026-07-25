@@ -29,7 +29,7 @@ export function SearchPanel({
   if (!visible) return null;
 
   return (
-    <div className="animate-in fade-in slide-in-from-top-2 mx-4 mt-3 rounded-[24px] bg-[color-mix(in_srgb,var(--color-grouped-secondary)_88%,transparent)] p-3 shadow-[0_8px_18px_rgba(0,0,0,0.08)] ring-1 ring-[var(--color-card-stroke)] backdrop-blur-xl">
+    <div className="mx-4 rounded-[24px] bg-[color-mix(in_srgb,var(--color-grouped-secondary)_88%,transparent)] p-3 shadow-[0_8px_18px_rgba(0,0,0,0.08)] ring-1 ring-[var(--color-card-stroke)] backdrop-blur-xl [margin-top:max(0.75rem,var(--safe-top))]">
       <div className="flex items-center gap-2.5 rounded-2xl bg-[var(--color-grouped-secondary)] px-3.5 py-3">
         <Search className="h-4 w-4 shrink-0 text-[var(--color-secondary-label)]" />
         <input

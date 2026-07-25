@@ -7,6 +7,7 @@ import {
 } from '@vis.gl/react-google-maps';
 import type { Carpark, MapViewport, ParkingMeterFeature } from '../../models';
 import { MapMode, parkingMeterFeatureId } from '../../models';
+import { locationService } from '../../services/locationService';
 import { useAppStore } from '../../store';
 import type { LatLng } from '../../core/geo';
 import {
@@ -14,7 +15,6 @@ import {
   getMeterMarkerIconURL,
   getMeterMarkerZIndex,
 } from './markerIcons';
-
 const MARKER_RENDER_RADIUS_METERS = 5_000;
 const PADDED_VISIBLE_REGION_MULTIPLIER = 1.25;
 const MAX_RENDERED_METER_MARKERS = 2000;
@@ -29,7 +29,7 @@ const GOOGLE_MAPS_MAP_ID =
 
 type AdvancedMarker = google.maps.marker.AdvancedMarkerElement;
 
-export function GoogleMapView({ bottomControlInset = 118 }: { bottomControlInset?: number }) {
+export function GoogleMapView() {
   if (!GOOGLE_MAPS_API_KEY) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[var(--color-grouped)] px-8 text-center text-[15px] text-[var(--color-secondary-label)]">
@@ -40,12 +40,12 @@ export function GoogleMapView({ bottomControlInset = 118 }: { bottomControlInset
 
   return (
     <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['marker']}>
-      <MapCanvas bottomControlInset={bottomControlInset} />
+      <MapCanvas />
     </APIProvider>
   );
 }
 
-function MapCanvas({ bottomControlInset }: { bottomControlInset: number }) {
+function MapCanvas() {
   const viewport = useAppStore((s) => s.viewport);
   const enableDarkMode = useAppStore((s) => s.enableDarkMode);
 
@@ -56,25 +56,23 @@ function MapCanvas({ bottomControlInset }: { bottomControlInset: number }) {
       defaultCenter={{ lat: viewport.latitude, lng: viewport.longitude }}
       defaultZoom={viewport.zoom}
       gestureHandling="greedy"
-      disableDefaultUI={false}
-      mapTypeControl={false}
-      streetViewControl={false}
-      fullscreenControl={false}
-      zoomControl
+      disableDefaultUI
+      clickableIcons={false}
       colorScheme={enableDarkMode ? 'DARK' : 'LIGHT'}
       reuseMaps
     >
-      <MapController bottomControlInset={bottomControlInset} />
+      <MapController />
     </GoogleMap>
   );
 }
 
-function MapController({ bottomControlInset }: { bottomControlInset: number }) {
+function MapController() {
   const map = useMap();
   const markerLib = useMapsLibrary('marker');
   const meterMarkersRef = useRef<Map<number, AdvancedMarker>>(new Map());
   const carparkMarkersRef = useRef<Map<number, AdvancedMarker>>(new Map());
   const selectedMarkerRef = useRef<AdvancedMarker | null>(null);
+  const userLocationMarkerRef = useRef<AdvancedMarker | null>(null);
   const isUserInteractingRef = useRef(false);
   const suppressViewportSyncUntilRef = useRef(0);
   const lastAppliedViewportRef = useRef<MapViewport | null>(null);
@@ -98,14 +96,55 @@ function MapController({ bottomControlInset }: { bottomControlInset: number }) {
   useEffect(() => {
     if (!map) return;
     map.setOptions({
+      disableDefaultUI: true,
+      clickableIcons: false,
+      gestureHandling: 'greedy',
+      zoomControl: false,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
-      clickableIcons: false,
-      gestureHandling: 'greedy',
-    });
-    void bottomControlInset;
-  }, [map, bottomControlInset]);
+      rotateControl: false,
+      scaleControl: false,
+      // Vector maps camera tilt/rotate control (the circular arrows button).
+      cameraControl: false,
+    } as google.maps.MapOptions);
+  }, [map]);
+
+  useEffect(() => {
+    if (!map || !markerLib) return;
+
+    const apply = (coordinate: LatLng | null) => {
+      if (!coordinate) {
+        if (userLocationMarkerRef.current) {
+          userLocationMarkerRef.current.map = null;
+          userLocationMarkerRef.current = null;
+        }
+        return;
+      }
+
+      const position = {
+        lat: coordinate.latitude,
+        lng: coordinate.longitude,
+      };
+
+      if (!userLocationMarkerRef.current) {
+        userLocationMarkerRef.current = new markerLib.AdvancedMarkerElement({
+          map,
+          position,
+          content: createUserLocationDot(),
+          zIndex: 9500,
+          title: 'Current location',
+        });
+      } else {
+        userLocationMarkerRef.current.position = position;
+        if (userLocationMarkerRef.current.map !== map) {
+          userLocationMarkerRef.current.map = map;
+        }
+      }
+    };
+
+    return locationService.subscribe(apply);
+  }, [map, markerLib]);
 
   useEffect(() => {
     if (!map) return;
@@ -372,10 +411,26 @@ function MapController({ bottomControlInset }: { bottomControlInset: number }) {
         selectedMarkerRef.current.map = null;
         selectedMarkerRef.current = null;
       }
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.map = null;
+        userLocationMarkerRef.current = null;
+      }
     };
   }, []);
 
   return null;
+}
+
+function createUserLocationDot(): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.style.width = '18px';
+  wrap.style.height = '18px';
+  wrap.style.borderRadius = '50%';
+  wrap.style.background = '#1a73e8';
+  wrap.style.border = '2.5px solid #ffffff';
+  wrap.style.boxShadow = '0 0 0 6px rgba(26,115,232,0.22), 0 2px 6px rgba(0,0,0,0.25)';
+  wrap.style.transform = 'translateY(50%)';
+  return wrap;
 }
 
 function createIconContent(

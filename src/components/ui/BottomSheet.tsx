@@ -14,6 +14,7 @@ export function BottomSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
+  /** `medium` is a shorter cap; `large` uses nearly full height when content needs it. */
   detent?: 'medium' | 'large';
   title?: string;
   leading?: ReactNode;
@@ -25,12 +26,12 @@ export function BottomSheet({
         <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Drawer.Content
           className={cn(
-            'fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[20px] bg-[var(--color-grouped)] outline-none',
+            'fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-[20px] bg-[var(--color-grouped)] outline-none',
             detent === 'medium' ? 'sheet-medium' : 'sheet-large',
           )}
           style={{ paddingBottom: 'var(--safe-bottom)' }}
         >
-          <div className="mx-auto mt-2 h-[5px] w-9 shrink-0 rounded-full bg-[var(--color-secondary-label)] opacity-40" />
+          <div className="mx-auto mt-2 mb-1 h-[5px] w-9 shrink-0 rounded-full bg-[var(--color-secondary-label)] opacity-40" />
 
           {(title || leading || trailing) && (
             <div className="relative flex h-11 shrink-0 items-center px-4">
@@ -46,7 +47,11 @@ export function BottomSheet({
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+          {/*
+            Grow with content up to the sheet max-height, then scroll.
+            Use default flex basis (auto) — not flex-1 — so short sheets don't stretch.
+          */}
+          <div className="min-h-0 overflow-y-auto overscroll-contain">{children}</div>
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>
