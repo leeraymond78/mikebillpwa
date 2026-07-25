@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MikeBill</title>
+    <script>
+      // GitHub Pages SPA redirect → index with path encoded in query, then hash-restored.
+      // https://github.com/rafgraph/spa-github-pages
+      sessionStorage.redirect = location.href;
+      var segments = location.pathname.split('/').filter(Boolean);
+      // Project page keeps the first segment (repo name).
+      var keep = segments.length > 0 ? 1 : 0;
+      var base = '/' + segments.slice(0, keep).join('/') + (keep ? '/' : '');
+      location.replace(
+        location.protocol +
+          '//' +
+          location.host +
+          base +
+          '?/' +
+          segments
+            .slice(keep)
+            .join('/')
+            .replace(/&/g, '~and~') +
+          (location.search ? '&' + location.search.slice(1).replace(/&/g, '~and~') : '') +
+          location.hash,
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
