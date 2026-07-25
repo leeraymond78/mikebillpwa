@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpRight,
+  ChevronLeft,
   ChevronRight,
   Globe,
   Home,
@@ -53,7 +54,9 @@ export function CarparkDetailSheet({
   const vacancyColor =
     vacancyText === 'Unknown' ? 'var(--color-secondary-label)' : 'var(--color-green)';
   const favorited = isFavoriteCarpark(detail.parkingId);
-  const photoURLs = detail.photos.map((p) => p.photoURL).filter(Boolean);
+  const photoURLs = detail.photos
+    .map((p) => apiService.normalizedRemoteURLString(p.photoURL))
+    .filter((url): url is string => Boolean(url));
   const height = formatHeightLimit(detail.heightLimit);
 
   return (
@@ -302,11 +305,14 @@ function RemoteImage({
       className={className}
       loading="lazy"
       draggable={draggable}
-      referrerPolicy="no-referrer"
     />
   );
 }
 
+/**
+ * Simple iOS-friendly gallery: one photo at a time, chevron buttons,
+ * swipe between photos, large close control, centered thumbnails.
+ */
 function PhotoGallery({
   urls,
   index,
@@ -316,174 +322,158 @@ function PhotoGallery({
   index: number;
   onClose: () => void;
 }) {
-  const clampedIndex = Math.max(0, Math.min(index, Math.max(0, urls.length - 1)));
-  const [selection, setSelection] = useState(clampedIndex);
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(0);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
-  const axisRef = useRef<'undecided' | 'horizontal' | 'vertical'>('undecided');
-  const dragXRef = useRef(0);
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
-
-  useEffect(() => {
-    const node = viewportRef.current;
-    if (!node) return;
-    const update = () => setViewportWidth(node.clientWidth);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
+  const images = useMemo(
+    () =>
+      urls
+        .map((url) => apiService.normalizedRemoteURLString(url))
+        .filter((url): url is string => Boolean(url)),
+    [urls],
+  );
+  const [selection, setSelection] = useState(() =>
+    Math.max(0, Math.min(index, Math.max(0, images.length - 1))),
+  );
+  const stageRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const goTo = (next: number) => {
-    setSelection(Math.max(0, Math.min(urls.length - 1, next)));
-    setDragX(0);
-    dragXRef.current = 0;
-    setDragging(false);
-    startRef.current = null;
-    axisRef.current = 'undecided';
+    if (images.length === 0) return;
+    setSelection(Math.max(0, Math.min(images.length - 1, next)));
   };
 
-  const finishGesture = () => {
-    if (!startRef.current) {
-      setDragging(false);
-      setDragX(0);
-      dragXRef.current = 0;
-      axisRef.current = 'undecided';
-      return;
-    }
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || images.length <= 1) return;
 
-    const dx = dragXRef.current;
-    const threshold = Math.max(40, viewportWidth * 0.18);
-    const current = selectionRef.current;
-    if (dx <= -threshold && current < urls.length - 1) {
-      goTo(current + 1);
-    } else if (dx >= threshold && current > 0) {
-      goTo(current - 1);
-    } else {
-      setDragX(0);
-      dragXRef.current = 0;
-      setDragging(false);
-      startRef.current = null;
-      axisRef.current = 'undecided';
-    }
-  };
+    const onStart = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    };
 
-  const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (urls.length <= 1) return;
-    const touch = event.touches[0];
-    if (!touch) return;
-    startRef.current = { x: touch.clientX, y: touch.clientY };
-    axisRef.current = 'undecided';
-    dragXRef.current = 0;
-    setDragX(0);
-    setDragging(true);
-  };
-
-  const onTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (!startRef.current) return;
-    const touch = event.touches[0];
-    if (!touch) return;
-    const dx = touch.clientX - startRef.current.x;
-    const dy = touch.clientY - startRef.current.y;
-
-    if (axisRef.current === 'undecided') {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      axisRef.current = Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
-      if (axisRef.current === 'vertical') {
-        startRef.current = null;
-        setDragging(false);
-        setDragX(0);
-        dragXRef.current = 0;
-        return;
+    const onEnd = (event: globalThis.TouchEvent) => {
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+      if (!start) return;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0) {
+        setSelection((value) => Math.min(images.length - 1, value + 1));
+      } else {
+        setSelection((value) => Math.max(0, value - 1));
       }
+    };
+
+    stage.addEventListener('touchstart', onStart, { passive: true });
+    stage.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      stage.removeEventListener('touchstart', onStart);
+      stage.removeEventListener('touchend', onEnd);
+    };
+  }, [images.length]);
+
+  useEffect(() => {
+    for (const offset of [-1, 1] as const) {
+      const url = images[selection + offset];
+      if (!url) continue;
+      const preload = new Image();
+      preload.src = url;
     }
+  }, [images, selection]);
 
-    if (axisRef.current !== 'horizontal') return;
-    event.preventDefault();
+  if (images.length === 0) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
+        <button
+          type="button"
+          aria-label="Close gallery"
+          onClick={onClose}
+          className="absolute right-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/20 text-white"
+          style={{ top: 'max(0.75rem, var(--safe-top))' }}
+        >
+          <X className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+        <p className="text-[15px] text-white/70">No photos available</p>
+      </div>
+    );
+  }
 
-    const current = selectionRef.current;
-    let next = dx;
-    if ((current === 0 && dx > 0) || (current === urls.length - 1 && dx < 0)) {
-      next = dx * 0.28;
-    }
-    dragXRef.current = next;
-    setDragX(next);
-  };
-
-  const hasThumbs = urls.length > 1;
-  const translateX =
-    viewportWidth > 0 ? -(selection * viewportWidth) + dragX : dragX;
+  const current = images[selection] ?? images[0];
+  const hasMany = images.length > 1;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col bg-black"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo gallery"
+    >
       <div
-        className="relative z-30 flex shrink-0 items-center justify-between px-5"
-        style={{ paddingTop: 'max(1.25rem, var(--safe-top))' }}
+        className="relative z-30 flex shrink-0 items-center justify-between gap-3 px-3"
+        style={{ paddingTop: 'max(0.5rem, var(--safe-top))' }}
       >
-        {hasThumbs ? (
-          <div className="rounded-full bg-black/55 px-3 py-2 text-[15px] font-semibold text-white">
-            {selection + 1} / {urls.length}
+        {hasMany ? (
+          <div className="rounded-full bg-white/15 px-3 py-2 text-[15px] font-semibold text-white">
+            {selection + 1} / {images.length}
           </div>
         ) : (
-          <span />
+          <span className="h-11 w-11" />
         )}
         <button
           type="button"
           aria-label="Close gallery"
           onClick={onClose}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-white active:bg-white/35"
         >
-          <X className="h-4 w-4" strokeWidth={3} />
+          <X className="h-5 w-5" strokeWidth={2.5} />
         </button>
       </div>
 
       <div
-        ref={viewportRef}
-        className="relative min-h-0 flex-1 overflow-hidden"
-        style={{ touchAction: 'none' }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={finishGesture}
-        onTouchCancel={finishGesture}
+        ref={stageRef}
+        className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-12"
       >
-        <div
-          className="flex h-full will-change-transform"
-          style={{
-            width: viewportWidth > 0 ? viewportWidth * urls.length : '100%',
-            transform: `translate3d(${translateX}px, 0, 0)`,
-            transition: dragging ? 'none' : 'transform 220ms ease-out',
-          }}
-        >
-          {urls.map((url, i) => (
-            <div
-              key={`${url}-${i}`}
-              className="flex h-full shrink-0 items-center justify-center px-3"
-              style={{ width: viewportWidth > 0 ? viewportWidth : '100%' }}
+        <img
+          key={current}
+          src={current}
+          alt=""
+          className="max-h-full max-w-full select-none object-contain"
+          draggable={false}
+        />
+
+        {hasMany ? (
+          <>
+            <button
+              type="button"
+              aria-label="Previous photo"
+              disabled={selection === 0}
+              onClick={() => goTo(selection - 1)}
+              className="absolute left-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white disabled:opacity-25"
             >
-              <RemoteImage
-                url={url}
-                className="pointer-events-none max-h-full max-w-full select-none object-contain"
-                draggable={false}
-              />
-            </div>
-          ))}
-        </div>
+              <ChevronLeft className="h-7 w-7" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next photo"
+              disabled={selection >= images.length - 1}
+              onClick={() => goTo(selection + 1)}
+              className="absolute right-2 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white disabled:opacity-25"
+            >
+              <ChevronRight className="h-7 w-7" strokeWidth={2.25} />
+            </button>
+          </>
+        ) : null}
       </div>
 
-      {hasThumbs ? (
+      {hasMany ? (
         <div
-          className="relative z-30 shrink-0 border-t border-white/10 bg-black/90"
-          style={{
-            paddingBottom: 'max(0.75rem, var(--safe-bottom))',
-            touchAction: 'manipulation',
-          }}
+          className="relative z-30 w-full shrink-0 border-t border-white/10 bg-black"
+          style={{ paddingBottom: 'max(0.75rem, var(--safe-bottom))' }}
         >
-          <div className="flex justify-center gap-2.5 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {urls.map((url, i) => {
+          <div className="flex w-full items-center justify-center gap-3 px-4 py-3">
+            {images.map((url, i) => {
               const selected = i === selection;
               return (
                 <button
@@ -491,18 +481,14 @@ function PhotoGallery({
                   type="button"
                   aria-label={`Show photo ${i + 1}`}
                   aria-current={selected}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    goTo(i);
-                  }}
-                  className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl ${
-                    selected
-                      ? 'opacity-100 shadow-[0_0_0_2px_#fff]'
-                      : 'opacity-55'
+                  onClick={() => goTo(i)}
+                  className={`h-16 w-[5.5rem] shrink-0 overflow-hidden rounded-xl ${
+                    selected ? 'opacity-100 ring-2 ring-white ring-offset-0' : 'opacity-55'
                   }`}
                 >
-                  <RemoteImage
-                    url={url}
+                  <img
+                    src={url}
+                    alt=""
                     className="pointer-events-none h-full w-full object-cover"
                     draggable={false}
                   />
