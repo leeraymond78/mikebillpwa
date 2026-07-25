@@ -10,7 +10,7 @@ export interface MeterCluster {
 }
 
 /** Individual meter markers only at this zoom and above. */
-export const MINIMUM_INDIVIDUAL_METER_ZOOM = 15.4;
+export const MINIMUM_INDIVIDUAL_METER_ZOOM = 15.5;
 
 /** One cluster per street + section parking area (e.g. 耀星街, 龍和道). */
 export function parkingAreaKey(feature: ParkingMeterFeature): string {

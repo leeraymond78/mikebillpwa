@@ -44,7 +44,9 @@ Custom domain / root deploy: set `VITE_BASE=/` in the environment.
 ## Required GitHub secrets
 
 - `VITE_GOOGLE_MAPS_API_KEY` — Maps JavaScript API (HTTP referrer restricted)
-- `VITE_GOOGLE_MAPS_STATIC_KEY` — optional Static Maps key for favorites thumbnails
+- `VITE_GOOGLE_MAPS_STATIC_KEY` — Static Maps API key for favorites thumbnails (preferred for static images)
+
+Favorites map thumbnails use the Static Maps key first (then the JS key as fallback) and load images with `referrerPolicy=no-referrer` so GitHub Pages referrers do not break restricted keys.
 
 ## PWA
 

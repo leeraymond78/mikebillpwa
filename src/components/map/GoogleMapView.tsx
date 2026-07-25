@@ -59,7 +59,7 @@ function MapCanvas() {
 
   return (
     <GoogleMap
-      className="h-full w-full"
+      className="map-bleed h-full w-full"
       mapId={GOOGLE_MAPS_MAP_ID}
       defaultCenter={{ lat: viewport.latitude, lng: viewport.longitude }}
       defaultZoom={viewport.zoom}
@@ -120,6 +120,28 @@ function MapController() {
       // Vector maps camera tilt/rotate control (the circular arrows button).
       cameraControl: false,
     } as google.maps.MapOptions);
+  }, [map]);
+
+  // iOS A2HS / visualViewport can settle after first paint; force Maps to refill.
+  useEffect(() => {
+    if (!map) return;
+
+    const relayout = () => {
+      google.maps.event.trigger(map, 'resize');
+    };
+
+    relayout();
+    const timeouts = [50, 250, 1000].map((ms) => window.setTimeout(relayout, ms));
+    window.addEventListener('resize', relayout);
+    window.visualViewport?.addEventListener('resize', relayout);
+    window.visualViewport?.addEventListener('scroll', relayout);
+
+    return () => {
+      for (const id of timeouts) window.clearTimeout(id);
+      window.removeEventListener('resize', relayout);
+      window.visualViewport?.removeEventListener('resize', relayout);
+      window.visualViewport?.removeEventListener('scroll', relayout);
+    };
   }, [map]);
 
   useEffect(() => {

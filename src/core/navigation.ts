@@ -45,9 +45,10 @@ export function buildStaticMapURL(options: {
   height?: number;
   scale?: number;
 }): string {
-  const width = options.width ?? 200;
+  const width = options.width ?? 256;
   const height = options.height ?? 152;
   const scale = options.scale ?? 2;
+  // Match iOS FavoritesView static map query shape.
   const params = new URLSearchParams({
     center: `${options.latitude},${options.longitude}`,
     zoom: String(Math.max(1, Math.min(20, Math.round(options.zoom)))),

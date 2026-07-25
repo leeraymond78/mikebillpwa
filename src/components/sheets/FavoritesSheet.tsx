@@ -9,11 +9,11 @@ import { SegmentedControl } from '../ui/LiquidUI';
 
 type FavoritesTab = 'maps' | 'carparks';
 
-/** Prefer the Maps JS key (same referrer rules as the live map); fall back to a dedicated Static key. */
+/** Prefer the dedicated Static Maps key; fall back to the Maps JS key. */
 function staticMapApiKeys(): string[] {
   const keys = [
-    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim(),
     (import.meta.env.VITE_GOOGLE_MAPS_STATIC_KEY as string | undefined)?.trim(),
+    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim(),
   ].filter((key): key is string => Boolean(key));
   return [...new Set(keys)];
 }
@@ -281,6 +281,9 @@ function MapThumbnail({
     <img
       src={url}
       alt=""
+      // Full-path referrers are often rejected by Static Maps key restrictions;
+      // omit referrer so the dedicated static key works on GitHub Pages.
+      referrerPolicy="no-referrer"
       className="h-[76px] w-[100px] shrink-0 rounded-xl object-cover shadow-[0_0_0_0.8px_var(--color-card-stroke)]"
       onError={() => {
         if (keyIndex < keys.length - 1) {
@@ -323,11 +326,18 @@ function FavoriteCarparkVacancy({ vacancy }: { vacancy: string | undefined }) {
 }
 
 function CarparkThumbnail({ favorite }: { favorite: FavoriteCarpark }) {
-  const url = apiService.normalizedRemoteURLString(favorite.thumbnail);
+  const carparks = useAppStore((s) => s.carparks);
+  const stored = apiService.normalizedRemoteURLString(favorite.thumbnail);
+  const fromList = apiService.normalizedRemoteURLString(
+    carparks.find((item) => item.parkingId === favorite.parkingId)?.thumbnail,
+  );
+  const url = stored ?? fromList;
+
   return url ? (
     <img
       src={url}
       alt=""
+      referrerPolicy="no-referrer"
       className="h-[72px] w-[72px] shrink-0 rounded-xl object-cover shadow-[0_0_0_0.8px_var(--color-card-stroke)]"
     />
   ) : (

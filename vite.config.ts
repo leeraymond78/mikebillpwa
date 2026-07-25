@@ -147,6 +147,26 @@ export default defineConfig(({ mode }) => {
             },
             {
               urlPattern: ({ url }) =>
+                url.hostname === 'maps.googleapis.com' &&
+                url.pathname.includes('/staticmap'),
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname === 'source.car4goal.com',
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'car4goal-media',
+                expiration: {
+                  maxEntries: 160,
+                  maxAgeSeconds: 60 * 60 * 24 * 14,
+                },
+                cacheableResponse: {
+                  statuses: [200],
+                },
+              },
+            },
+            {
+              urlPattern: ({ url }) =>
                 url.hostname === 'maps.googleapis.com' ||
                 url.hostname === 'maps.gstatic.com' ||
                 url.hostname.endsWith('.googleapis.com'),

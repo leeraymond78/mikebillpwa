@@ -435,13 +435,18 @@ export const useAppStore = create<AppStore>((set, get) => {
       get().favoriteCarparks.some((item) => item.parkingId === parkingId),
 
     toggleFavoriteCarpark: (detail) => {
-      const { favoriteCarparks } = get();
+      const { favoriteCarparks, carparks } = get();
       const index = favoriteCarparks.findIndex((item) => item.parkingId === detail.parkingId);
       let next: FavoriteCarpark[];
       if (index >= 0) {
         next = favoriteCarparks.filter((_, i) => i !== index);
       } else {
-        const photos = carparkDetailPhotoURLs(detail);
+        const photoURLs = carparkDetailPhotoURLs(detail)
+          .map((url) => apiService.normalizedRemoteURLString(url))
+          .filter((url): url is string => Boolean(url));
+        const listThumbnail = apiService.normalizedRemoteURLString(
+          carparks.find((item) => item.parkingId === detail.parkingId)?.thumbnail,
+        );
         next = [
           ...favoriteCarparks,
           {
@@ -450,7 +455,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             address: detail.address,
             latitude: detail.latitude,
             longitude: detail.longitude,
-            thumbnail: photos[0] ?? null,
+            thumbnail: photoURLs[0] ?? listThumbnail ?? null,
             vacancyId: detail.vacancyId,
           },
         ];

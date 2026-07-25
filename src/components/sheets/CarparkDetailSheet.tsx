@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowUpRight,
   ChevronRight,
@@ -257,13 +258,16 @@ export function CarparkDetailSheet({
         </div>
       </BottomSheet>
 
-      {gallery ? (
-        <PhotoGallery
-          urls={gallery.urls}
-          index={gallery.index}
-          onClose={() => setGallery(null)}
-        />
-      ) : null}
+      {gallery
+        ? createPortal(
+            <PhotoGallery
+              urls={gallery.urls}
+              index={gallery.index}
+              onClose={() => setGallery(null)}
+            />,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -273,7 +277,15 @@ function formatHeightLimit(value: string | null | undefined): string {
   return value.endsWith('m') ? value : `${value}m`;
 }
 
-function RemoteImage({ url, className }: { url: string; className?: string }) {
+function RemoteImage({
+  url,
+  className,
+  draggable = true,
+}: {
+  url: string;
+  className?: string;
+  draggable?: boolean;
+}) {
   const normalized = useMemo(
     () => apiService.normalizedRemoteURLString(url),
     [url],
@@ -283,7 +295,16 @@ function RemoteImage({ url, className }: { url: string; className?: string }) {
       <div className={`bg-[var(--color-fill-tertiary)] ${className ?? ''}`} />
     );
   }
-  return <img src={normalized} alt="" className={className} loading="lazy" />;
+  return (
+    <img
+      src={normalized}
+      alt=""
+      className={className}
+      loading="lazy"
+      draggable={draggable}
+      referrerPolicy="no-referrer"
+    />
+  );
 }
 
 function PhotoGallery({
@@ -295,12 +316,115 @@ function PhotoGallery({
   index: number;
   onClose: () => void;
 }) {
-  const [selection, setSelection] = useState(index);
+  const clampedIndex = Math.max(0, Math.min(index, Math.max(0, urls.length - 1)));
+  const [selection, setSelection] = useState(clampedIndex);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const axisRef = useRef<'undecided' | 'horizontal' | 'vertical'>('undecided');
+  const dragXRef = useRef(0);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return;
+    const update = () => setViewportWidth(node.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const goTo = (next: number) => {
+    setSelection(Math.max(0, Math.min(urls.length - 1, next)));
+    setDragX(0);
+    dragXRef.current = 0;
+    setDragging(false);
+    startRef.current = null;
+    axisRef.current = 'undecided';
+  };
+
+  const finishGesture = () => {
+    if (!startRef.current) {
+      setDragging(false);
+      setDragX(0);
+      dragXRef.current = 0;
+      axisRef.current = 'undecided';
+      return;
+    }
+
+    const dx = dragXRef.current;
+    const threshold = Math.max(40, viewportWidth * 0.18);
+    const current = selectionRef.current;
+    if (dx <= -threshold && current < urls.length - 1) {
+      goTo(current + 1);
+    } else if (dx >= threshold && current > 0) {
+      goTo(current - 1);
+    } else {
+      setDragX(0);
+      dragXRef.current = 0;
+      setDragging(false);
+      startRef.current = null;
+      axisRef.current = 'undecided';
+    }
+  };
+
+  const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (urls.length <= 1) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    startRef.current = { x: touch.clientX, y: touch.clientY };
+    axisRef.current = 'undecided';
+    dragXRef.current = 0;
+    setDragX(0);
+    setDragging(true);
+  };
+
+  const onTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!startRef.current) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - startRef.current.x;
+    const dy = touch.clientY - startRef.current.y;
+
+    if (axisRef.current === 'undecided') {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axisRef.current = Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+      if (axisRef.current === 'vertical') {
+        startRef.current = null;
+        setDragging(false);
+        setDragX(0);
+        dragXRef.current = 0;
+        return;
+      }
+    }
+
+    if (axisRef.current !== 'horizontal') return;
+    event.preventDefault();
+
+    const current = selectionRef.current;
+    let next = dx;
+    if ((current === 0 && dx > 0) || (current === urls.length - 1 && dx < 0)) {
+      next = dx * 0.28;
+    }
+    dragXRef.current = next;
+    setDragX(next);
+  };
+
+  const hasThumbs = urls.length > 1;
+  const translateX =
+    viewportWidth > 0 ? -(selection * viewportWidth) + dragX : dragX;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black">
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 pt-5">
-        {urls.length > 1 ? (
+    <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+      <div
+        className="relative z-30 flex shrink-0 items-center justify-between px-5"
+        style={{ paddingTop: 'max(1.25rem, var(--safe-top))' }}
+      >
+        {hasThumbs ? (
           <div className="rounded-full bg-black/55 px-3 py-2 text-[15px] font-semibold text-white">
             {selection + 1} / {urls.length}
           </div>
@@ -318,22 +442,76 @@ function PhotoGallery({
       </div>
 
       <div
-        className="flex h-full snap-x snap-mandatory overflow-x-auto"
-        onScroll={(event) => {
-          const width = event.currentTarget.clientWidth;
-          if (width <= 0) return;
-          setSelection(Math.round(event.currentTarget.scrollLeft / width));
-        }}
+        ref={viewportRef}
+        className="relative min-h-0 flex-1 overflow-hidden"
+        style={{ touchAction: 'none' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={finishGesture}
+        onTouchCancel={finishGesture}
       >
-        {urls.map((url, i) => (
-          <div
-            key={`${url}-${i}`}
-            className="flex h-full w-full shrink-0 snap-center items-center justify-center px-2"
-          >
-            <RemoteImage url={url} className="max-h-full max-w-full object-contain" />
-          </div>
-        ))}
+        <div
+          className="flex h-full will-change-transform"
+          style={{
+            width: viewportWidth > 0 ? viewportWidth * urls.length : '100%',
+            transform: `translate3d(${translateX}px, 0, 0)`,
+            transition: dragging ? 'none' : 'transform 220ms ease-out',
+          }}
+        >
+          {urls.map((url, i) => (
+            <div
+              key={`${url}-${i}`}
+              className="flex h-full shrink-0 items-center justify-center px-3"
+              style={{ width: viewportWidth > 0 ? viewportWidth : '100%' }}
+            >
+              <RemoteImage
+                url={url}
+                className="pointer-events-none max-h-full max-w-full select-none object-contain"
+                draggable={false}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+
+      {hasThumbs ? (
+        <div
+          className="relative z-30 shrink-0 border-t border-white/10 bg-black/90"
+          style={{
+            paddingBottom: 'max(0.75rem, var(--safe-bottom))',
+            touchAction: 'manipulation',
+          }}
+        >
+          <div className="flex justify-center gap-2.5 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {urls.map((url, i) => {
+              const selected = i === selection;
+              return (
+                <button
+                  key={`thumb-${url}-${i}`}
+                  type="button"
+                  aria-label={`Show photo ${i + 1}`}
+                  aria-current={selected}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    goTo(i);
+                  }}
+                  className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl ${
+                    selected
+                      ? 'opacity-100 shadow-[0_0_0_2px_#fff]'
+                      : 'opacity-55'
+                  }`}
+                >
+                  <RemoteImage
+                    url={url}
+                    className="pointer-events-none h-full w-full object-cover"
+                    draggable={false}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
