@@ -117,8 +117,8 @@ export function HomeMapPage() {
     carparkDetail == null;
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-transparent">
-      <div className="map-bleed absolute inset-0">
+    <div className="app-shell bg-transparent">
+      <div className="map-bleed">
         <GoogleMapView />
       </div>
 

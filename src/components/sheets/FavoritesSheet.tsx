@@ -337,7 +337,6 @@ function CarparkThumbnail({ favorite }: { favorite: FavoriteCarpark }) {
     <img
       src={url}
       alt=""
-      referrerPolicy="no-referrer"
       className="h-[72px] w-[72px] shrink-0 rounded-xl object-cover shadow-[0_0_0_0.8px_var(--color-card-stroke)]"
     />
   ) : (

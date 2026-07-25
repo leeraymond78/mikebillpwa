@@ -152,18 +152,10 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkOnly',
             },
             {
-              urlPattern: ({ url }) => url.hostname === 'source.car4goal.com',
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'car4goal-media',
-                expiration: {
-                  maxEntries: 160,
-                  maxAgeSeconds: 60 * 60 * 24 * 14,
-                },
-                cacheableResponse: {
-                  statuses: [200],
-                },
-              },
+              urlPattern: ({ url }) =>
+                url.hostname === 'source.car4goal.com' ||
+                url.hostname.endsWith('.wasabisys.com'),
+              handler: 'NetworkOnly',
             },
             {
               urlPattern: ({ url }) =>
@@ -185,8 +177,10 @@ export default defineConfig(({ mode }) => {
             },
             {
               urlPattern: ({ request, url }) =>
-                request.destination === 'image' ||
-                /\.(?:png|jpg|jpeg|webp|gif|svg)$/i.test(url.pathname),
+                (request.destination === 'image' ||
+                  /\.(?:png|jpg|jpeg|webp|gif|svg)$/i.test(url.pathname)) &&
+                url.hostname !== 'source.car4goal.com' &&
+                !url.hostname.endsWith('.wasabisys.com'),
               handler: 'CacheFirst',
               options: {
                 cacheName: 'images',
@@ -195,7 +189,7 @@ export default defineConfig(({ mode }) => {
                   maxAgeSeconds: 60 * 60 * 24 * 30,
                 },
                 cacheableResponse: {
-                  statuses: [0, 200],
+                  statuses: [200],
                 },
               },
             },

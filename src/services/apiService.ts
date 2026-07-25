@@ -103,7 +103,9 @@ async function requestJson<T>(
 
 class APIServiceImpl {
   /**
-   * Normalize remote media URLs the same way as iOS `normalizedRemoteURLString`.
+   * Normalize remote media URLs the same way as iOS `normalizedRemoteURLString`,
+   * plus web-specific rewrite so HTTPS pages are not redirected to HTTP Wasabi
+   * (iOS Safari blocks that mixed-content redirect → broken “?” images).
    */
   normalizedRemoteURLString(raw: string | null | undefined): string | null {
     if (raw === null || raw === undefined) return null;
@@ -116,6 +118,22 @@ class APIServiceImpl {
 
     if (value.toLowerCase().startsWith('http://')) {
       value = `https://${value.slice('http://'.length)}`;
+    }
+
+    try {
+      const url = new URL(value);
+
+      // https://source.car4goal.com/... → 307 → http://*.wasabisys.com/...
+      // Browsers block that mixed-content redirect on HTTPS pages (broken “?”).
+      // Serve path-style HTTPS Wasabi instead (same object, works in <img>).
+      if (
+        url.hostname === 'source.car4goal.com' ||
+        url.hostname === 'source.car4goal.com.s3.ap-southeast-1.wasabisys.com'
+      ) {
+        return `https://s3.ap-southeast-1.wasabisys.com/source.car4goal.com${url.pathname}${url.search}`;
+      }
+    } catch {
+      // Keep the best-effort normalized string.
     }
 
     return value;
@@ -242,7 +260,10 @@ class APIServiceImpl {
       },
     );
 
-    return response.list;
+    return response.list.map((carpark) => ({
+      ...carpark,
+      thumbnail: this.normalizedRemoteURLString(carpark.thumbnail),
+    }));
   }
 
   async fetchCarparkVacancies(): Promise<Record<string, string>> {
@@ -266,7 +287,7 @@ class APIServiceImpl {
       detail: true,
     });
 
-    return requestJson(
+    const detail = await requestJson(
       `${CARPARK_DETAIL_URL}/${parkingId}`,
       parseCarparkDetail,
       'fetchCarparkDetail',
@@ -279,6 +300,18 @@ class APIServiceImpl {
         body,
       },
     );
+
+    return {
+      ...detail,
+      photos: detail.photos.map((photo) => ({
+        ...photo,
+        photoURL: this.normalizedRemoteURLString(photo.photoURL) ?? photo.photoURL,
+      })),
+      videos: detail.videos.map((video) => ({
+        ...video,
+        thumbnail: this.normalizedRemoteURLString(video.thumbnail) ?? video.thumbnail,
+      })),
+    };
   }
 
   async searchLocations(query: string): Promise<SearchLocation[]> {

@@ -133,12 +133,14 @@ function MapController() {
     relayout();
     const timeouts = [50, 250, 1000].map((ms) => window.setTimeout(relayout, ms));
     window.addEventListener('resize', relayout);
+    window.addEventListener('mikebill:app-height', relayout);
     window.visualViewport?.addEventListener('resize', relayout);
     window.visualViewport?.addEventListener('scroll', relayout);
 
     return () => {
       for (const id of timeouts) window.clearTimeout(id);
       window.removeEventListener('resize', relayout);
+      window.removeEventListener('mikebill:app-height', relayout);
       window.visualViewport?.removeEventListener('resize', relayout);
       window.visualViewport?.removeEventListener('scroll', relayout);
     };
